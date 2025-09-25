@@ -1,17 +1,14 @@
-// Waifu Gallery - app.js (final)
-// Features: fetch via /api/proxy or /api/proxy?cache=1&pages=N, pagination, popup, prev/next, ads-first download flow, NSFW switch, keyboard nav, localStorage cache.
+// Waifu Gallery - app.js (final, simplified download flow)
 
-const API_PROXY = "/api/proxy"; // Vercel function endpoint
-const DIRECT_AD_URL = "https://www.revenuecpmgate.com/yi59046hjd?key=38c26dc552e10ee4babe41f597d26a40";
-const MAX_PAGES_GUESS = 26764; // used for pagination display fallback
+const API_PROXY = "/api/proxy"; 
+const MAX_PAGES_GUESS = 26764;
 
 // state
 let page = 1;
-let currentTags = ""; // empty => show main listing
-let galleryData = []; // array of posts for current page
-let cachedPages = {}; // local in-memory cache for pages {tag|page : [posts]}
+let currentTags = "";
+let galleryData = [];
+let cachedPages = {};
 let currentIndex = 0;
-let adClicked = false;
 let nsfwAllowed = false;
 
 // dom
@@ -64,44 +61,23 @@ toggleMode.textContent = document.body.classList.contains("light") ? "Dark" : "L
 siteTitle.addEventListener("click", () => { location.reload(); });
 
 // ---------- Fetch helpers ----------
-async function fetchPage(tags="", pageNum=1, useCacheFirst=true) {
+async function fetchPage(tags="", pageNum=1) {
   const cacheKey = `${tags}|${pageNum}`;
-  if (useCacheFirst && cachedPages[cacheKey]) {
-    return cachedPages[cacheKey];
-  }
+  if (cachedPages[cacheKey]) return cachedPages[cacheKey];
 
-  // try localStorage cached DB
-  const localDbKey = `waifu_db_${tags || "default"}`;
-  const localDbJSON = localStorage.getItem(localDbKey);
-  if (useCacheFirst && localDbJSON) {
-    try {
-      const local = JSON.parse(localDbJSON);
-      if (local[pageNum]) {
-        cachedPages[cacheKey] = local[pageNum];
-        return local[pageNum];
-      }
-    } catch(e){}
-  }
-
-  // build url
   const url = `${API_PROXY}?tags=${encodeURIComponent(tags)}&page=${pageNum}`;
-
   try {
     setLoading(true);
     const res = await fetch(url);
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Server error ${res.status}: ${txt}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await safeJSON(res) || [];
-    // store memory cache
     cachedPages[cacheKey] = data;
     setLoading(false);
     return data;
   } catch (err) {
     setLoading(false);
     console.error("fetchPage error", err);
-    showMessage("Failed to load data. Try again or check your connection.", 6000);
+    showMessage("Failed to load data.", 6000);
     return [];
   }
 }
@@ -113,36 +89,13 @@ async function loadTagSuggestions() {
     if (!res.ok) return;
     const tags = await res.json();
     if (!Array.isArray(tags)) return;
-    if (!tagDatalist) return;
     tagDatalist.innerHTML = "";
     tags.forEach(tag => {
       const option = document.createElement("option");
       option.value = tag;
       tagDatalist.appendChild(option);
     });
-  } catch (e) {
-    // ignore silently
-  }
-}
-
-// bulk cache (server-side combined cache): used to build initial local DB
-async function bulkCacheInit(tags="", pages=3) {
-  try {
-    const url = `${API_PROXY}?cache=1&pages=${pages}&tags=${encodeURIComponent(tags)}`;
-    const res = await fetch(url);
-    const data = await safeJSON(res) || {};
-    // data is { pages: {1:[..],2:[..],...} }
-    const localDbKey = `waifu_db_${tags || "default"}`;
-    localStorage.setItem(localDbKey, JSON.stringify(data.pages || {}));
-    // prime in-memory cache
-    Object.keys(data.pages || {}).forEach(p => {
-      cachedPages[`${tags}|${p}`] = data.pages[p];
-    });
-    return true;
-  } catch (e) {
-    console.warn("bulkCacheInit failed", e);
-    return false;
-  }
+  } catch {}
 }
 
 // ---------- Render gallery ----------
@@ -152,38 +105,41 @@ function clearGallery() {
 }
 
 function applyNSFWFilter(posts) {
-  if (nsfwAllowed) return posts;
-  return posts.filter(p => p.rating !== "e");
+  return nsfwAllowed ? posts : posts.filter(p => p.rating !== "e");
+}
+
+function mapRatingText(r) {
+  if (r === "s") return "SFW";
+  if (r === "q") return "Q";
+  if (r === "e") return "NSFW";
+  return r || "";
 }
 
 function renderGallery(posts) {
   clearGallery();
-  const filtered = applyNSFWFilter(posts || []);
+  const filtered = applyNSFWFilter(posts);
   if (!filtered.length) {
     showMessage(`No results${currentTags ? ` for "${currentTags}"` : ""}`, 6000);
     return;
   }
-  filtered.forEach((post, idx) => {
+  galleryData = filtered;
+  filtered.forEach(post => {
     const card = document.createElement("div");
     card.className = "card";
+
     const img = document.createElement("img");
-    // preview fallback order: preview_url -> sample_url -> file_url -> derive
-    img.src = post.preview_url || post.sample_url || post.file_url || deriveFallback(post);
+    img.src = post.preview_url; // always preview for speed
     img.loading = "lazy";
     img.alt = post.tags || `post-${post.id}`;
     card.appendChild(img);
 
-    // badge for rating
     const badge = document.createElement("div");
     badge.className = "badge";
     badge.textContent = mapRatingText(post.rating);
     card.appendChild(badge);
 
     img.addEventListener("click", () => {
-      // when user clicks, we should open preview using best available (preview)
-      galleryData = filtered; // set list used by popup navigation
       currentIndex = filtered.indexOf(post);
-      adClicked = false;
       openPopupForIndex(currentIndex);
     });
 
@@ -202,138 +158,73 @@ function renderPagination(currentPage, largeTotal=MAX_PAGES_GUESS) {
     return b;
   };
 
-  // Prev
   const prev = createBtn("← Previous", null, () => {
-    if (page > 1) {
-      page--;
-      loadPage(currentTags, page);
-      window.scrollTo({top:0, behavior:'smooth'});
-    }
+    if (page > 1) { page--; loadPage(currentTags, page); window.scrollTo({top:0,behavior:'smooth'}); }
   });
   prev.disabled = page === 1;
   paginationEl.appendChild(prev);
 
-  // page numbers window: show around current page
   const windowSize = 5;
   let start = Math.max(1, page - Math.floor(windowSize/2));
   let end = start + windowSize - 1;
   if (end > largeTotal) { end = largeTotal; start = Math.max(1, end - windowSize + 1); }
 
-  // if start > 1 show first + ellipsis
   if (start > 1) {
     paginationEl.appendChild(createBtn("1", null, ()=>{ page=1; loadPage(currentTags,1)}));
-    if (start > 2) {
-      const ell = document.createElement("span"); ell.textContent = " … "; ell.style.color = "var(--muted)"; paginationEl.appendChild(ell);
-    }
+    if (start > 2) paginationEl.appendChild(document.createTextNode(" … "));
   }
 
   for (let i = start; i <= end; i++) {
-    const isActive = (i === page);
-    const b = createBtn(String(i), isActive ? "active" : null, ()=>{ page = i; loadPage(currentTags,page); window.scrollTo({top:0,behavior:'smooth'}); });
-    if (isActive) b.classList.add("active");
+    const b = createBtn(String(i), i===page ? "active" : null, ()=>{ page=i; loadPage(currentTags,page); window.scrollTo({top:0,behavior:'smooth'}); });
     paginationEl.appendChild(b);
   }
 
-  // if end < last show ellipsis + last
   if (end < largeTotal) {
-    if (end < largeTotal -1) {
-      const ell = document.createElement("span"); ell.textContent = " … "; ell.style.color = "var(--muted)"; paginationEl.appendChild(ell);
-    }
-    paginationEl.appendChild(createBtn(String(largeTotal), null, ()=>{ page = largeTotal; loadPage(currentTags, page); window.scrollTo({top:0,behavior:'smooth'}); }));
+    if (end < largeTotal -1) paginationEl.appendChild(document.createTextNode(" … "));
+    paginationEl.appendChild(createBtn(String(largeTotal), null, ()=>{ page=largeTotal; loadPage(currentTags,page); window.scrollTo({top:0,behavior:'smooth'}); }));
   }
 
-  // Next
   const next = createBtn("Next →", null, () => {
-    page++;
-    loadPage(currentTags, page);
-    window.scrollTo({top:0,behavior:'smooth'});
+    page++; loadPage(currentTags,page); window.scrollTo({top:0,behavior:'smooth'});
   });
   paginationEl.appendChild(next);
 }
 
-// ---------- Popup behavior ----------
-function mapRatingText(r) {
-  if (!r) return "";
-  if (r === "s") return "SFW";
-  if (r === "q") return "Q";
-  if (r === "e") return "NSFW";
-  return r.toUpperCase();
-}
-
-function deriveFallback(post) {
-  // Attempt to derive a likely image path from sample_url or id
-  // If post has 'sample_url' we can replace '/sample/' -> '/image/' as fallback
-  if (post.sample_url) {
-    return post.sample_url.replace("/sample/", "/image/");
-  }
-  if (post.file_url) return post.file_url;
-  // last resort: try sample path pattern
-  if (post.preview_url) return post.preview_url.replace("/preview/", "/image/").replace("/preview/", "/jpeg/");
-  return "";
-}
-
+// ---------- Popup ----------
 function openPopupForIndex(idx) {
   const post = galleryData[idx];
   if (!post) return;
-  // preview image show (prefer sample/jpeg for better quality)
-  const previewSrc = post.sample_url || post.jpeg_url || post.preview_url || deriveFallback(post);
+
+  const previewSrc = post.sample_url || post.jpeg_url || post.file_url || post.preview_url;
   popupImage.src = previewSrc;
-  popupImage.loading = "eager";
   popupTags.textContent = "Tags: " + (post.tags || "");
   popupRating.textContent = "Rating: " + mapRatingText(post.rating);
   popup.classList.remove("hidden");
   document.body.classList.add("modal-open");
 
-  // download config: first click opens ad, second initiates download of HD (file_url)
-  adClicked = false;
-  downloadBtn.textContent = "Download (1: Ad → 2: File)";
+  // Direct download flow
+  downloadBtn.textContent = "DOWNLOAD HD";
   downloadBtn.onclick = () => {
-    if (!adClicked) {
-      // open ad in new tab (also popunder script may trigger)
-      window.open(DIRECT_AD_URL, "_blank");
-      adClicked = true;
-      downloadBtn.textContent = "Click again to start download";
-    } else {
-      // start programmatic download with priority: file_url -> jpeg_url -> sample_url -> fallback
-      const hd = post.file_url || post.jpeg_url || post.sample_url || deriveFallback(post);
-      if (!hd) {
-        showMessage("No downloadable file found for this post.", 4000);
-        return;
-      }
-      const a = document.createElement("a");
-      a.href = hd;
-      // try to produce filename
-      const filename = `waifu_${post.id || Date.now()}.${(hd.split(".").pop().split(/\#|\?/)[0] || "jpg")}`;
-      a.setAttribute("download", filename);
-      // append and click
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      adClicked = false;
-      downloadBtn.textContent = "Download (1: Ad → 2: File)";
+    const hd = post.file_url || post.jpeg_url || post.sample_url;
+    if (!hd) {
+      showMessage("No downloadable file found.", 4000);
+      return;
     }
+    const a = document.createElement("a");
+    a.href = hd;
+    a.setAttribute("download", `waifu_${post.id || Date.now()}.jpg`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 }
 
 // popup nav
-prevBtn.onclick = () => {
-  if (currentIndex > 0) {
-    currentIndex--;
-    openPopupForIndex(currentIndex);
-  }
-};
-nextBtn.onclick = () => {
-  if (currentIndex < galleryData.length - 1) {
-    currentIndex++;
-    openPopupForIndex(currentIndex);
-  }
-};
+prevBtn.onclick = () => { if (currentIndex > 0) openPopupForIndex(--currentIndex); };
+nextBtn.onclick = () => { if (currentIndex < galleryData.length - 1) openPopupForIndex(++currentIndex); };
 closePopup.onclick = () => { popup.classList.add("hidden"); document.body.classList.remove("modal-open"); };
+popupBackdrop.addEventListener("click", ()=>{ closePopup.click(); });
 
-// close by backdrop click
-popupBackdrop.addEventListener("click", ()=>{ popup.classList.add("hidden"); document.body.classList.remove("modal-open"); });
-
-// keyboard nav
 document.addEventListener("keydown", (ev) => {
   if (popup.classList.contains("hidden")) return;
   if (ev.key === "ArrowLeft") prevBtn.click();
@@ -341,49 +232,33 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape") closePopup.click();
 });
 
-// ---------- Main loader ----------
+// ---------- Main ----------
 async function loadPage(tags="", pageNum=1) {
-  // Reset
   messageEl.classList.add("hidden");
-  // For initial load (page 1 and no tags) try bulk cache init to speed up
-  if (!tags && pageNum === 1) {
-    await bulkCacheInit("", 3).catch(()=>{});
-  }
-
-  const posts = await fetchPage(tags, pageNum, true);
-  if (!Array.isArray(posts) || posts.length === 0) {
-    renderGallery([]);
-    renderPagination(pageNum);
-    return;
-  }
-
+  const posts = await fetchPage(tags, pageNum);
   renderGallery(posts);
   renderPagination(pageNum);
 }
 
-// ---------- UI events ----------
+// UI events
 searchBtn.addEventListener("click", () => {
   currentTags = (searchInput.value || "").trim();
   page = 1;
   loadPage(currentTags, page);
 });
-
 nsfwCheckbox.addEventListener("change", () => {
   nsfwAllowed = nsfwCheckbox.checked;
   localStorage.setItem("waifu_nsfw", nsfwAllowed ? "true" : "false");
-  // re-render current page with filter
   loadPage(currentTags, page);
 });
-
 toggleMode.addEventListener("click", () => {
   const isLight = document.body.classList.toggle("light");
   localStorage.setItem("waifu_theme", isLight ? "light" : "dark");
   toggleMode.textContent = isLight ? "Dark" : "Light";
 });
 
-// initial
+// init
 (async function init(){
-  // default initial: show main listing from homepage of yande.re -> if client doesn't pass tags show blank => proxy will fetch default list
   currentTags = "";
   page = 1;
   loadTagSuggestions();
