@@ -52,18 +52,6 @@ const safeJSON = async (res) => {
   try { return await res.json(); } catch(e){ return null; }
 };
 
-// pick the best direct file URL hosted on files.yande.re with image extension
-function getDirectImageUrl(post) {
-  const candidates = [post?.jpeg_url, post?.file_url, post?.sample_url, post?.preview_url];
-  for (const url of candidates) {
-    if (typeof url !== "string") continue;
-    const isFilesHost = url.includes("files.yande.re");
-    const isImageExt = /\.(jpe?g|png|gif|webp)(?:$|[?#])/i.test(url);
-    if (isFilesHost && isImageExt) return url;
-  }
-  return "";
-}
-
 // persist NSFW choice
 nsfwAllowed = localStorage.getItem("waifu_nsfw") === "true";
 nsfwCheckbox.checked = nsfwAllowed;
@@ -179,8 +167,8 @@ function renderGallery(posts) {
     const card = document.createElement("div");
     card.className = "card";
     const img = document.createElement("img");
-    // preview fallback order: preview_url -> sample_url -> file_url -> derive
-    img.src = getDirectImageUrl({ preview_url: post.preview_url, sample_url: post.sample_url, file_url: post.file_url, jpeg_url: post.jpeg_url }) || deriveFallback(post);
+    // Grid: gunakan preview_url saja
+    img.src = post.preview_url || "";
     img.loading = "lazy";
     img.alt = post.tags || `post-${post.id}`;
     card.appendChild(img);
@@ -287,8 +275,8 @@ function deriveFallback(post) {
 function openPopupForIndex(idx) {
   const post = galleryData[idx];
   if (!post) return;
-  // preview image show (prefer preview or sample)
-  const previewSrc = getDirectImageUrl({ preview_url: post.preview_url, sample_url: post.sample_url }) || deriveFallback(post);
+  // Popup: gunakan sample_url (fallback preview_url)
+  const previewSrc = post.sample_url || post.preview_url || "";
   popupImage.src = previewSrc;
   popupImage.loading = "eager";
   popupTags.textContent = "Tags: " + (post.tags || "");
@@ -296,8 +284,8 @@ function openPopupForIndex(idx) {
   popup.classList.remove("hidden");
   document.body.classList.add("modal-open");
 
-  // Dua langkah berulang: 1) Ads, 2) Buka link download, lalu reset ke 1
-  const jpeg = getDirectImageUrl(post) || deriveFallback(post);
+  // Dua langkah berulang: 1) Ads, 2) Buka link download (jpeg_url), lalu reset ke 1
+  const jpeg = post.jpeg_url || "";
   let downloadStep = 1;
   downloadBtn.classList.remove("hidden");
   downloadBtn.textContent = "Download HD step 1";
@@ -309,7 +297,11 @@ function openPopupForIndex(idx) {
       downloadStep = 2;
     } else {
       // klik kedua: buka link download di tab baru, lalu reset ke langkah 1
-      if (jpeg) window.open(jpeg, "_blank");
+      if (jpeg) {
+        window.open(jpeg, "_blank");
+      } else {
+        showMessage("Link JPEG tidak tersedia untuk post ini.", 4000);
+      }
       downloadBtn.textContent = "Download HD step 1";
       downloadStep = 1;
     }
