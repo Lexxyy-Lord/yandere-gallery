@@ -167,7 +167,7 @@ function renderGallery(posts) {
     const card = document.createElement("div");
     card.className = "card";
     const img = document.createElement("img");
-    // Grid: gunakan preview_url saja
+    // Grid preview: gunakan preview_url saja agar ringan
     img.src = post.preview_url || "";
     img.loading = "lazy";
     img.alt = post.tags || `post-${post.id}`;
@@ -275,8 +275,8 @@ function deriveFallback(post) {
 function openPopupForIndex(idx) {
   const post = galleryData[idx];
   if (!post) return;
-  // Popup: gunakan sample_url (fallback preview_url)
-  const previewSrc = post.sample_url || post.preview_url || "";
+  // Popup image: selalu pakai sample_url (fallback preview/derive)
+  const previewSrc = post.sample_url || post.preview_url || deriveFallback(post);
   popupImage.src = previewSrc;
   popupImage.loading = "eager";
   popupTags.textContent = "Tags: " + (post.tags || "");
@@ -284,8 +284,17 @@ function openPopupForIndex(idx) {
   popup.classList.remove("hidden");
   document.body.classList.add("modal-open");
 
-  // Dua langkah berulang: 1) Ads, 2) Buka link download (jpeg_url), lalu reset ke 1
-  const jpeg = post.jpeg_url || "";
+  // Dua langkah berulang: 1) Ads, 2) Buka link download (taati aturan is_shown_in_index)
+  function resolveDownloadUrl(currentPost, list){
+    const id = currentPost.id;
+    const md5 = currentPost.md5;
+    const anyHidden = (list || []).some(p => (p && (p.id === id || (md5 && p.md5 === md5))) && p.is_shown_in_index === false);
+    if (currentPost.is_shown_in_index === false || anyHidden) {
+      return currentPost.sample_url || deriveFallback(currentPost);
+    }
+    return currentPost.file_url || currentPost.jpeg_url || currentPost.sample_url || deriveFallback(currentPost);
+  }
+  const downloadURL = resolveDownloadUrl(post, galleryData);
   let downloadStep = 1;
   downloadBtn.classList.remove("hidden");
   downloadBtn.textContent = "Download HD step 1";
@@ -297,11 +306,7 @@ function openPopupForIndex(idx) {
       downloadStep = 2;
     } else {
       // klik kedua: buka link download di tab baru, lalu reset ke langkah 1
-      if (jpeg) {
-        window.open(jpeg, "_blank");
-      } else {
-        showMessage("Link JPEG tidak tersedia untuk post ini.", 4000);
-      }
+      if (downloadURL) window.open(downloadURL, "_blank");
       downloadBtn.textContent = "Download HD step 1";
       downloadStep = 1;
     }
