@@ -169,6 +169,7 @@ function renderGallery(posts) {
     const img = document.createElement("img");
     // preview fallback order: preview_url -> sample_url -> file_url -> derive
     img.src = post.preview_url || post.sample_url || post.file_url || deriveFallback(post);
+    img.loading = "lazy";
     img.alt = post.tags || `post-${post.id}`;
     card.appendChild(img);
 
@@ -277,6 +278,7 @@ function openPopupForIndex(idx) {
   // preview image show (prefer preview or sample)
   const previewSrc = post.preview_url || post.sample_url || deriveFallback(post);
   popupImage.src = previewSrc;
+  popupImage.loading = "eager";
   popupTags.textContent = "Tags: " + (post.tags || "");
   popupRating.textContent = "Rating: " + mapRatingText(post.rating);
   popup.classList.remove("hidden");
