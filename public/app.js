@@ -275,8 +275,8 @@ function deriveFallback(post) {
 function openPopupForIndex(idx) {
   const post = galleryData[idx];
   if (!post) return;
-  // preview image show (prefer preview or sample)
-  const previewSrc = post.preview_url || post.sample_url || deriveFallback(post);
+  // preview image show (prefer sample/jpeg for better quality)
+  const previewSrc = post.sample_url || post.jpeg_url || post.preview_url || deriveFallback(post);
   popupImage.src = previewSrc;
   popupImage.loading = "eager";
   popupTags.textContent = "Tags: " + (post.tags || "");
@@ -294,8 +294,8 @@ function openPopupForIndex(idx) {
       adClicked = true;
       downloadBtn.textContent = "Click again to start download";
     } else {
-      // start programmatic download of HD file_url fallback to sample/fallback
-      const hd = post.file_url || post.sample_url || deriveFallback(post);
+      // start programmatic download with priority: file_url -> jpeg_url -> sample_url -> fallback
+      const hd = post.file_url || post.jpeg_url || post.sample_url || deriveFallback(post);
       if (!hd) {
         showMessage("No downloadable file found for this post.", 4000);
         return;
