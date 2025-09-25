@@ -1,17 +1,15 @@
 // Waifu Gallery - app.js (final)
-
-// Features: fetch via /api/proxy, pagination, popup, prev/next, ads-first download flow,
-// NSFW switch, keyboard nav, localStorage cache.
+// Features: fetch via /api/proxy or /api/proxy?cache=1&pages=N, pagination, popup, prev/next, ads-first download flow, NSFW switch, keyboard nav, localStorage cache.
 
 const API_PROXY = "/api/proxy"; // Vercel function endpoint
 const DIRECT_AD_URL = "https://www.revenuecpmgate.com/yi59046hjd?key=38c26dc552e10ee4babe41f597d26a40";
-const MAX_PAGES_GUESS = 26764; // fallback total pages
+const MAX_PAGES_GUESS = 26764; // used for pagination display fallback
 
 // state
 let page = 1;
-let currentTags = "";
-let galleryData = [];
-let cachedPages = {};
+let currentTags = ""; // empty => show main listing
+let galleryData = []; // array of posts for current page
+let cachedPages = {}; // local in-memory cache for pages {tag|page : [posts]}
 let currentIndex = 0;
 let adClicked = false;
 let nsfwAllowed = false;
@@ -42,19 +40,16 @@ const nextBtn = document.getElementById("nextBtn");
 const showMessage = (text, timeout = 4000) => {
   messageEl.textContent = text;
   messageEl.classList.remove("hidden");
-  if (timeout) setTimeout(() => messageEl.classList.add("hidden"), timeout);
+  if (timeout) setTimeout(()=>messageEl.classList.add("hidden"), timeout);
 };
 
 const setLoading = (on) => {
-  galleryEl.style.filter = on ? "grayscale(30%) blur(1px)" : "";
+  if (on) galleryEl.style.filter = "grayscale(30%) blur(1px)";
+  else galleryEl.style.filter = "";
 };
 
 const safeJSON = async (res) => {
-  try {
-    return await res.json();
-  } catch (e) {
-    return null;
-  }
+  try { return await res.json(); } catch(e){ return null; }
 };
 
 // persist NSFW choice
@@ -62,23 +57,20 @@ nsfwAllowed = localStorage.getItem("waifu_nsfw") === "true";
 nsfwCheckbox.checked = nsfwAllowed;
 
 // theme persisted
-if (localStorage.getItem("waifu_theme") === "light") {
-  document.body.classList.add("light");
-}
+if (localStorage.getItem("waifu_theme") === "light") document.body.classList.add("light");
 toggleMode.textContent = document.body.classList.contains("light") ? "Dark" : "Light";
 
 // title click reload
-siteTitle.addEventListener("click", () => {
-  location.reload();
-});
+siteTitle.addEventListener("click", () => { location.reload(); });
 
 // ---------- Fetch helpers ----------
-async function fetchPage(tags = "", pageNum = 1, useCacheFirst = true) {
+async function fetchPage(tags="", pageNum=1, useCacheFirst=true) {
   const cacheKey = `${tags}|${pageNum}`;
   if (useCacheFirst && cachedPages[cacheKey]) {
     return cachedPages[cacheKey];
   }
 
+  // try localStorage cached DB
   const localDbKey = `waifu_db_${tags || "default"}`;
   const localDbJSON = localStorage.getItem(localDbKey);
   if (useCacheFirst && localDbJSON) {
@@ -88,9 +80,10 @@ async function fetchPage(tags = "", pageNum = 1, useCacheFirst = true) {
         cachedPages[cacheKey] = local[pageNum];
         return local[pageNum];
       }
-    } catch (e) {}
+    } catch(e){}
   }
 
+  // build url
   const url = `${API_PROXY}?tags=${encodeURIComponent(tags)}&page=${pageNum}`;
 
   try {
@@ -100,7 +93,8 @@ async function fetchPage(tags = "", pageNum = 1, useCacheFirst = true) {
       const txt = await res.text();
       throw new Error(`Server error ${res.status}: ${txt}`);
     }
-    const data = (await safeJSON(res)) || [];
+    const data = await safeJSON(res) || [];
+    // store memory cache
     cachedPages[cacheKey] = data;
     setLoading(false);
     return data;
@@ -121,23 +115,27 @@ async function loadTagSuggestions() {
     if (!Array.isArray(tags)) return;
     if (!tagDatalist) return;
     tagDatalist.innerHTML = "";
-    tags.forEach((tag) => {
+    tags.forEach(tag => {
       const option = document.createElement("option");
       option.value = tag;
       tagDatalist.appendChild(option);
     });
-  } catch (e) {}
+  } catch (e) {
+    // ignore silently
+  }
 }
 
-// bulk cache
-async function bulkCacheInit(tags = "", pages = 3) {
+// bulk cache (server-side combined cache): used to build initial local DB
+async function bulkCacheInit(tags="", pages=3) {
   try {
     const url = `${API_PROXY}?cache=1&pages=${pages}&tags=${encodeURIComponent(tags)}`;
     const res = await fetch(url);
-    const data = (await safeJSON(res)) || {};
+    const data = await safeJSON(res) || {};
+    // data is { pages: {1:[..],2:[..],...} }
     const localDbKey = `waifu_db_${tags || "default"}`;
     localStorage.setItem(localDbKey, JSON.stringify(data.pages || {}));
-    Object.keys(data.pages || {}).forEach((p) => {
+    // prime in-memory cache
+    Object.keys(data.pages || {}).forEach(p => {
       cachedPages[`${tags}|${p}`] = data.pages[p];
     });
     return true;
@@ -155,7 +153,7 @@ function clearGallery() {
 
 function applyNSFWFilter(posts) {
   if (nsfwAllowed) return posts;
-  return posts.filter((p) => p.rating !== "e");
+  return posts.filter(p => p.rating !== "e");
 }
 
 function renderGallery(posts) {
@@ -165,23 +163,25 @@ function renderGallery(posts) {
     showMessage(`No results${currentTags ? ` for "${currentTags}"` : ""}`, 6000);
     return;
   }
-
-  filtered.forEach((post) => {
+  filtered.forEach((post, idx) => {
     const card = document.createElement("div");
     card.className = "card";
     const img = document.createElement("img");
+    // preview fallback order: preview_url -> sample_url -> file_url -> derive
     img.src = post.preview_url || post.sample_url || post.file_url || deriveFallback(post);
     img.loading = "lazy";
     img.alt = post.tags || `post-${post.id}`;
     card.appendChild(img);
 
+    // badge for rating
     const badge = document.createElement("div");
     badge.className = "badge";
     badge.textContent = mapRatingText(post.rating);
     card.appendChild(badge);
 
     img.addEventListener("click", () => {
-      galleryData = filtered;
+      // when user clicks, we should open preview using best available (preview)
+      galleryData = filtered; // set list used by popup navigation
       currentIndex = filtered.indexOf(post);
       adClicked = false;
       openPopupForIndex(currentIndex);
@@ -192,9 +192,8 @@ function renderGallery(posts) {
 }
 
 // ---------- Pagination ----------
-function renderPagination(currentPage, largeTotal = MAX_PAGES_GUESS) {
+function renderPagination(currentPage, largeTotal=MAX_PAGES_GUESS) {
   paginationEl.innerHTML = "";
-
   const createBtn = (label, cls, onClick) => {
     const b = document.createElement("button");
     b.textContent = label;
@@ -203,66 +202,51 @@ function renderPagination(currentPage, largeTotal = MAX_PAGES_GUESS) {
     return b;
   };
 
+  // Prev
   const prev = createBtn("← Previous", null, () => {
     if (page > 1) {
       page--;
       loadPage(currentTags, page);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({top:0, behavior:'smooth'});
     }
   });
   prev.disabled = page === 1;
   paginationEl.appendChild(prev);
 
+  // page numbers window: show around current page
   const windowSize = 5;
-  let start = Math.max(1, page - Math.floor(windowSize / 2));
+  let start = Math.max(1, page - Math.floor(windowSize/2));
   let end = start + windowSize - 1;
-  if (end > largeTotal) {
-    end = largeTotal;
-    start = Math.max(1, end - windowSize + 1);
-  }
+  if (end > largeTotal) { end = largeTotal; start = Math.max(1, end - windowSize + 1); }
 
+  // if start > 1 show first + ellipsis
   if (start > 1) {
-    paginationEl.appendChild(createBtn("1", null, () => {
-      page = 1;
-      loadPage(currentTags, 1);
-    }));
+    paginationEl.appendChild(createBtn("1", null, ()=>{ page=1; loadPage(currentTags,1)}));
     if (start > 2) {
-      const ell = document.createElement("span");
-      ell.textContent = " … ";
-      ell.style.color = "var(--muted)";
-      paginationEl.appendChild(ell);
+      const ell = document.createElement("span"); ell.textContent = " … "; ell.style.color = "var(--muted)"; paginationEl.appendChild(ell);
     }
   }
 
   for (let i = start; i <= end; i++) {
-    const isActive = i === page;
-    const b = createBtn(String(i), isActive ? "active" : null, () => {
-      page = i;
-      loadPage(currentTags, page);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
+    const isActive = (i === page);
+    const b = createBtn(String(i), isActive ? "active" : null, ()=>{ page = i; loadPage(currentTags,page); window.scrollTo({top:0,behavior:'smooth'}); });
     if (isActive) b.classList.add("active");
     paginationEl.appendChild(b);
   }
 
+  // if end < last show ellipsis + last
   if (end < largeTotal) {
-    if (end < largeTotal - 1) {
-      const ell = document.createElement("span");
-      ell.textContent = " … ";
-      ell.style.color = "var(--muted)";
-      paginationEl.appendChild(ell);
+    if (end < largeTotal -1) {
+      const ell = document.createElement("span"); ell.textContent = " … "; ell.style.color = "var(--muted)"; paginationEl.appendChild(ell);
     }
-    paginationEl.appendChild(createBtn(String(largeTotal), null, () => {
-      page = largeTotal;
-      loadPage(currentTags, page);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }));
+    paginationEl.appendChild(createBtn(String(largeTotal), null, ()=>{ page = largeTotal; loadPage(currentTags, page); window.scrollTo({top:0,behavior:'smooth'}); }));
   }
 
+  // Next
   const next = createBtn("Next →", null, () => {
     page++;
     loadPage(currentTags, page);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({top:0,behavior:'smooth'});
   });
   paginationEl.appendChild(next);
 }
@@ -277,20 +261,21 @@ function mapRatingText(r) {
 }
 
 function deriveFallback(post) {
+  // Attempt to derive a likely image path from sample_url or id
+  // If post has 'sample_url' we can replace '/sample/' -> '/image/' as fallback
   if (post.sample_url) {
     return post.sample_url.replace("/sample/", "/image/");
   }
   if (post.file_url) return post.file_url;
-  if (post.preview_url) {
-    return post.preview_url.replace("/preview/", "/image/").replace("/preview/", "/jpeg/");
-  }
+  // last resort: try sample path pattern
+  if (post.preview_url) return post.preview_url.replace("/preview/", "/image/").replace("/preview/", "/jpeg/");
   return "";
 }
 
 function openPopupForIndex(idx) {
   const post = galleryData[idx];
   if (!post) return;
-
+  // preview image show (prefer sample/jpeg for better quality)
   const previewSrc = post.sample_url || post.jpeg_url || post.preview_url || deriveFallback(post);
   popupImage.src = previewSrc;
   popupImage.loading = "eager";
@@ -299,22 +284,33 @@ function openPopupForIndex(idx) {
   popup.classList.remove("hidden");
   document.body.classList.add("modal-open");
 
+  // download config: first click opens ad, second initiates download of HD (file_url)
   adClicked = false;
-  downloadBtn.textContent = "Download (Ad → HD)";
+  downloadBtn.textContent = "Download (1: Ad → 2: File)";
   downloadBtn.onclick = () => {
     if (!adClicked) {
+      // open ad in new tab (also popunder script may trigger)
       window.open(DIRECT_AD_URL, "_blank");
       adClicked = true;
-      downloadBtn.textContent = "Click again for HD";
+      downloadBtn.textContent = "Click again to start download";
     } else {
+      // start programmatic download with priority: file_url -> jpeg_url -> sample_url -> fallback
       const hd = post.file_url || post.jpeg_url || post.sample_url || deriveFallback(post);
       if (!hd) {
         showMessage("No downloadable file found for this post.", 4000);
         return;
       }
-      window.open(hd, "_blank"); // buka langsung files.yande.re/jpeg atau /image
+      const a = document.createElement("a");
+      a.href = hd;
+      // try to produce filename
+      const filename = `waifu_${post.id || Date.now()}.${(hd.split(".").pop().split(/\#|\?/)[0] || "jpg")}`;
+      a.setAttribute("download", filename);
+      // append and click
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       adClicked = false;
-      downloadBtn.textContent = "Download (Ad → HD)";
+      downloadBtn.textContent = "Download (1: Ad → 2: File)";
     }
   };
 }
@@ -332,14 +328,12 @@ nextBtn.onclick = () => {
     openPopupForIndex(currentIndex);
   }
 };
-closePopup.onclick = () => {
-  popup.classList.add("hidden");
-  document.body.classList.remove("modal-open");
-};
-popupBackdrop.addEventListener("click", () => {
-  popup.classList.add("hidden");
-  document.body.classList.remove("modal-open");
-});
+closePopup.onclick = () => { popup.classList.add("hidden"); document.body.classList.remove("modal-open"); };
+
+// close by backdrop click
+popupBackdrop.addEventListener("click", ()=>{ popup.classList.add("hidden"); document.body.classList.remove("modal-open"); });
+
+// keyboard nav
 document.addEventListener("keydown", (ev) => {
   if (popup.classList.contains("hidden")) return;
   if (ev.key === "ArrowLeft") prevBtn.click();
@@ -348,10 +342,12 @@ document.addEventListener("keydown", (ev) => {
 });
 
 // ---------- Main loader ----------
-async function loadPage(tags = "", pageNum = 1) {
+async function loadPage(tags="", pageNum=1) {
+  // Reset
   messageEl.classList.add("hidden");
+  // For initial load (page 1 and no tags) try bulk cache init to speed up
   if (!tags && pageNum === 1) {
-    await bulkCacheInit("", 3).catch(() => {});
+    await bulkCacheInit("", 3).catch(()=>{});
   }
 
   const posts = await fetchPage(tags, pageNum, true);
@@ -375,6 +371,7 @@ searchBtn.addEventListener("click", () => {
 nsfwCheckbox.addEventListener("change", () => {
   nsfwAllowed = nsfwCheckbox.checked;
   localStorage.setItem("waifu_nsfw", nsfwAllowed ? "true" : "false");
+  // re-render current page with filter
   loadPage(currentTags, page);
 });
 
@@ -384,8 +381,9 @@ toggleMode.addEventListener("click", () => {
   toggleMode.textContent = isLight ? "Dark" : "Light";
 });
 
-// init
-(async function init() {
+// initial
+(async function init(){
+  // default initial: show main listing from homepage of yande.re -> if client doesn't pass tags show blank => proxy will fetch default list
   currentTags = "";
   page = 1;
   loadTagSuggestions();
