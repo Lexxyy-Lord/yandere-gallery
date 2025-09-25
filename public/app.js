@@ -35,8 +35,6 @@ const closePopup = document.getElementById("closePopup");
 const downloadBtn = document.getElementById("downloadBtn");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
-const downloadPanel = document.getElementById("downloadPanel");
-const downloadLink = document.getElementById("downloadLink");
 
 // ---------- Utilities ----------
 const showMessage = (text, timeout = 4000) => {
@@ -289,33 +287,18 @@ function openPopupForIndex(idx) {
   // Dua langkah berulang: 1) Ads, 2) Buka link download, lalu reset ke 1
   const jpeg = post.jpeg_url || post.file_url || post.sample_url || deriveFallback(post);
   let downloadStep = 1;
-  if (downloadPanel && downloadLink) {
-    downloadPanel.classList.add("hidden");
-    downloadLink.removeAttribute("href");
-    downloadLink.textContent = "";
-  }
   downloadBtn.classList.remove("hidden");
-  downloadBtn.textContent = "Download";
+  downloadBtn.textContent = "Download HD step 1";
   downloadBtn.onclick = () => {
     if (downloadStep === 1) {
-      // klik pertama: buka iklan dan tampilkan link
+      // klik pertama: buka iklan
       window.open(DIRECT_AD_URL, "_blank");
-      if (downloadPanel && downloadLink && jpeg) {
-        downloadLink.href = jpeg;
-        downloadLink.textContent = jpeg;
-        downloadPanel.classList.remove("hidden");
-      }
-      downloadBtn.textContent = "Open Download";
+      downloadBtn.textContent = "Open Download HD";
       downloadStep = 2;
     } else {
       // klik kedua: buka link download di tab baru, lalu reset ke langkah 1
       if (jpeg) window.open(jpeg, "_blank");
-      if (downloadPanel && downloadLink) {
-        downloadPanel.classList.add("hidden");
-        downloadLink.removeAttribute("href");
-        downloadLink.textContent = "";
-      }
-      downloadBtn.textContent = "Download";
+      downloadBtn.textContent = "Download HD step 1";
       downloadStep = 1;
     }
   };
