@@ -286,8 +286,9 @@ function openPopupForIndex(idx) {
   popup.classList.remove("hidden");
   document.body.classList.add("modal-open");
 
-  // dua langkah: klik pertama -> iklan, lalu tampilkan link download dan sembunyikan tombol
+  // Dua langkah berulang: 1) Ads, 2) Buka link download, lalu reset ke 1
   const jpeg = post.jpeg_url || post.file_url || post.sample_url || deriveFallback(post);
+  let downloadStep = 1;
   if (downloadPanel && downloadLink) {
     downloadPanel.classList.add("hidden");
     downloadLink.removeAttribute("href");
@@ -296,16 +297,27 @@ function openPopupForIndex(idx) {
   downloadBtn.classList.remove("hidden");
   downloadBtn.textContent = "Download";
   downloadBtn.onclick = () => {
-    // klik pertama: buka iklan
-    window.open(DIRECT_AD_URL, "_blank");
-    // lalu siapkan link download dan tampilkan
-    if (downloadPanel && downloadLink && jpeg) {
-      downloadLink.href = jpeg;
-      downloadLink.textContent = jpeg;
-      downloadPanel.classList.remove("hidden");
+    if (downloadStep === 1) {
+      // klik pertama: buka iklan dan tampilkan link
+      window.open(DIRECT_AD_URL, "_blank");
+      if (downloadPanel && downloadLink && jpeg) {
+        downloadLink.href = jpeg;
+        downloadLink.textContent = jpeg;
+        downloadPanel.classList.remove("hidden");
+      }
+      downloadBtn.textContent = "Open Download";
+      downloadStep = 2;
+    } else {
+      // klik kedua: buka link download di tab baru, lalu reset ke langkah 1
+      if (jpeg) window.open(jpeg, "_blank");
+      if (downloadPanel && downloadLink) {
+        downloadPanel.classList.add("hidden");
+        downloadLink.removeAttribute("href");
+        downloadLink.textContent = "";
+      }
+      downloadBtn.textContent = "Download";
+      downloadStep = 1;
     }
-    // sembunyikan tombol download setelah klik pertama
-    downloadBtn.classList.add("hidden");
   };
 }
 
