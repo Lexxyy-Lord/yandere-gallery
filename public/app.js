@@ -286,24 +286,26 @@ function openPopupForIndex(idx) {
   popup.classList.remove("hidden");
   document.body.classList.add("modal-open");
 
-  // download link panel: show jpeg_url if exists, otherwise fallback
+  // dua langkah: klik pertama -> iklan, lalu tampilkan link download dan sembunyikan tombol
   const jpeg = post.jpeg_url || post.file_url || post.sample_url || deriveFallback(post);
   if (downloadPanel && downloadLink) {
-    if (jpeg) {
-      downloadPanel.classList.remove("hidden");
+    downloadPanel.classList.add("hidden");
+    downloadLink.removeAttribute("href");
+    downloadLink.textContent = "";
+  }
+  downloadBtn.classList.remove("hidden");
+  downloadBtn.textContent = "Download";
+  downloadBtn.onclick = () => {
+    // klik pertama: buka iklan
+    window.open(DIRECT_AD_URL, "_blank");
+    // lalu siapkan link download dan tampilkan
+    if (downloadPanel && downloadLink && jpeg) {
       downloadLink.href = jpeg;
       downloadLink.textContent = jpeg;
-    } else {
-      downloadPanel.classList.add("hidden");
-      downloadLink.removeAttribute("href");
-      downloadLink.textContent = "";
+      downloadPanel.classList.remove("hidden");
     }
-  }
-
-  // download button: open panel link directly in new tab
-  downloadBtn.textContent = "Open JPEG Link";
-  downloadBtn.onclick = () => {
-    if (jpeg) window.open(jpeg, "_blank");
+    // sembunyikan tombol download setelah klik pertama
+    downloadBtn.classList.add("hidden");
   };
 }
 
