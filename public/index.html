@@ -1,44 +1,64 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Yande.re Gallery</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Waifu Gallery</title>
+  <link rel="stylesheet" href="/style.css" />
 </head>
-<body class="dark">
-  <header>
-    <h1>Yande.re Gallery</h1>
-    <div class="controls">
-      <input type="text" id="searchInput" placeholder="Search tags (e.g. dress)">
-      <button id="searchBtn">Search</button>
-      <button id="toggleMode">☀️ Light</button>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <h1 id="siteTitle" class="title">Waifu Gallery</h1>
+      <div class="controls">
+        <input id="searchInput" type="text" placeholder="Search tags (e.g. dress maid)" />
+        <button id="searchBtn" class="btn">Search</button>
+        <label class="nsfw-toggle">
+          <input id="nsfwCheckbox" type="checkbox" />
+          <span>Show NSFW</span>
+        </label>
+        <button id="toggleMode" class="btn small">Light</button>
+      </div>
     </div>
   </header>
 
   <main>
-    <div id="gallery" class="gallery"></div>
-    <div id="pagination" class="pagination"></div>
+    <div id="message" class="message hidden"></div>
+
+    <section id="gallery" class="gallery" aria-live="polite"></section>
+
+    <nav id="pagination" class="pagination" aria-label="pagination"></nav>
   </main>
 
-  <!-- Popup -->
-  <div id="popup" class="popup hidden">
-    <div class="popup-content">
-      <span id="closePopup" class="close">&times;</span>
-      <img id="popupImage" src="" alt="Preview">
-      <p id="popupTags"></p>
-      <p id="popupRating"></p>
-      <div class="popup-buttons">
-        <button id="prevBtn">⬅ Prev</button>
-        <button id="downloadBtn">Download</button>
-        <button id="nextBtn">Next ➡</button>
+  <!-- Popup Modal -->
+  <div id="popup" class="popup hidden" role="dialog" aria-modal="true">
+    <div class="popup-backdrop" id="popupBackdrop"></div>
+    <div class="popup-content" role="document">
+      <button id="closePopup" class="close" aria-label="close">✕</button>
+
+      <div class="popup-body">
+        <button id="prevBtn" class="nav-btn">⬅</button>
+
+        <div class="preview-wrap">
+          <img id="popupImage" alt="Preview" />
+          <div id="imgMeta" class="img-meta">
+            <div id="popupTags" class="tags"></div>
+            <div id="popupRating" class="rating"></div>
+          </div>
+        </div>
+
+        <button id="nextBtn" class="nav-btn">➡</button>
+      </div>
+
+      <div class="popup-actions">
+        <button id="downloadBtn" class="btn primary">Download</button>
       </div>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="/app.js"></script>
 
-  <!-- Ads popunder -->
-  <script type='text/javascript' src='//pl27719880.revenuecpmgate.com/4a/94/e0/4a94e0c2cc0d6a54dfbc17dd88ced01f.js'></script>
+  <!-- Popunder script + direct ad link already used by download flow -->
+  <script type="text/javascript" src="//pl27719880.revenuecpmgate.com/4a/94/e0/4a94e0c2cc0d6a54dfbc17dd88ced01f.js"></script>
 </body>
 </html>
