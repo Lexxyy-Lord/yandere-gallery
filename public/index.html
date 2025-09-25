@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yande.re Gallery</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Yande.re Gallery</h1>
+    <div class="controls">
+      <input id="searchInput" type="text" placeholder="Search tags (e.g. dress maid)">
+      <button id="searchBtn">Search</button>
+      <button id="toggleMode">🌙 Dark</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="gallery" class="gallery"></div>
+    <button id="loadMore">Load More</button>
+  </main>
+
+  <!-- Popup -->
+  <div id="popup" class="popup hidden">
+    <div class="popup-content">
+      <span id="closePopup">&times;</span>
+      <div class="popup-image-wrapper">
+        <button id="prevBtn" class="nav-btn">⬅️</button>
+        <img id="popupImage" src="" alt="Preview">
+        <button id="nextBtn" class="nav-btn">➡️</button>
+      </div>
+      <div class="info">
+        <p><b>Rating:</b> <span id="popupRating"></span></p>
+        <p><b>Tags:</b> <span id="popupTags"></span></p>
+        <button id="downloadBtn">Download</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="animate.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+    "name": "yandere-gallery",
+    "version": "1.0.0",
+    "description": "Yande.re Gallery with Vercel Proxy",
+    "main": "index.js",
+    "scripts": {
+      "dev": "vercel dev",
+      "start": "vercel dev"
+    },
+    "keywords": [
+      "yandere",
+      "gallery",
+      "vercel",
+      "anime",
+      "proxy"
+    ],
+    "author": "LIXEY",
+    "license": "MIT"
+  }
+  
