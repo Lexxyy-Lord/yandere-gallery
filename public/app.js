@@ -52,6 +52,18 @@ const safeJSON = async (res) => {
   try { return await res.json(); } catch(e){ return null; }
 };
 
+// pick the best direct file URL hosted on files.yande.re with image extension
+function getDirectImageUrl(post) {
+  const candidates = [post?.jpeg_url, post?.file_url, post?.sample_url, post?.preview_url];
+  for (const url of candidates) {
+    if (typeof url !== "string") continue;
+    const isFilesHost = url.includes("files.yande.re");
+    const isImageExt = /\.(jpe?g|png|gif|webp)(?:$|[?#])/i.test(url);
+    if (isFilesHost && isImageExt) return url;
+  }
+  return "";
+}
+
 // persist NSFW choice
 nsfwAllowed = localStorage.getItem("waifu_nsfw") === "true";
 nsfwCheckbox.checked = nsfwAllowed;
@@ -168,7 +180,7 @@ function renderGallery(posts) {
     card.className = "card";
     const img = document.createElement("img");
     // preview fallback order: preview_url -> sample_url -> file_url -> derive
-    img.src = post.preview_url || post.sample_url || post.file_url || deriveFallback(post);
+    img.src = getDirectImageUrl({ preview_url: post.preview_url, sample_url: post.sample_url, file_url: post.file_url, jpeg_url: post.jpeg_url }) || deriveFallback(post);
     img.loading = "lazy";
     img.alt = post.tags || `post-${post.id}`;
     card.appendChild(img);
@@ -276,7 +288,7 @@ function openPopupForIndex(idx) {
   const post = galleryData[idx];
   if (!post) return;
   // preview image show (prefer preview or sample)
-  const previewSrc = post.preview_url || post.sample_url || deriveFallback(post);
+  const previewSrc = getDirectImageUrl({ preview_url: post.preview_url, sample_url: post.sample_url }) || deriveFallback(post);
   popupImage.src = previewSrc;
   popupImage.loading = "eager";
   popupTags.textContent = "Tags: " + (post.tags || "");
@@ -285,7 +297,7 @@ function openPopupForIndex(idx) {
   document.body.classList.add("modal-open");
 
   // Dua langkah berulang: 1) Ads, 2) Buka link download, lalu reset ke 1
-  const jpeg = post.jpeg_url || post.file_url || post.sample_url || deriveFallback(post);
+  const jpeg = getDirectImageUrl(post) || deriveFallback(post);
   let downloadStep = 1;
   downloadBtn.classList.remove("hidden");
   downloadBtn.textContent = "Download HD step 1";
