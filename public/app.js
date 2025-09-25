@@ -23,6 +23,7 @@ const toggleMode = document.getElementById("toggleMode");
 const galleryEl = document.getElementById("gallery");
 const paginationEl = document.getElementById("pagination");
 const messageEl = document.getElementById("message");
+const tagDatalist = document.getElementById("tagSuggestions");
 
 // popup
 const popup = document.getElementById("popup");
@@ -102,6 +103,25 @@ async function fetchPage(tags="", pageNum=1, useCacheFirst=true) {
     console.error("fetchPage error", err);
     showMessage("Failed to load data. Try again or check your connection.", 6000);
     return [];
+  }
+}
+
+// ---------- Tag suggestions ----------
+async function loadTagSuggestions() {
+  try {
+    const res = await fetch("/tags.json");
+    if (!res.ok) return;
+    const tags = await res.json();
+    if (!Array.isArray(tags)) return;
+    if (!tagDatalist) return;
+    tagDatalist.innerHTML = "";
+    tags.forEach(tag => {
+      const option = document.createElement("option");
+      option.value = tag;
+      tagDatalist.appendChild(option);
+    });
+  } catch (e) {
+    // ignore silently
   }
 }
 
@@ -364,5 +384,6 @@ toggleMode.addEventListener("click", () => {
   // default initial: show main listing from homepage of yande.re -> if client doesn't pass tags show blank => proxy will fetch default list
   currentTags = "";
   page = 1;
+  loadTagSuggestions();
   await loadPage(currentTags, page);
 })();

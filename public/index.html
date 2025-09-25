@@ -11,7 +11,8 @@
     <div class="header-inner">
       <h1 id="siteTitle" class="title">Waifu Gallery</h1>
       <div class="controls">
-        <input id="searchInput" type="text" placeholder="Search tags (e.g. dress maid)" />
+        <input id="searchInput" type="text" list="tagSuggestions" placeholder="Search tags (dress maid)" />
+        <datalist id="tagSuggestions"></datalist>
         <button id="searchBtn" class="btn">Search</button>
         <label class="nsfw-toggle">
           <input id="nsfwCheckbox" type="checkbox" />
