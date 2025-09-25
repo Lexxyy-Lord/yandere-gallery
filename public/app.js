@@ -35,6 +35,8 @@ const closePopup = document.getElementById("closePopup");
 const downloadBtn = document.getElementById("downloadBtn");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
+const downloadPanel = document.getElementById("downloadPanel");
+const downloadLink = document.getElementById("downloadLink");
 
 // ---------- Utilities ----------
 const showMessage = (text, timeout = 4000) => {
@@ -275,8 +277,8 @@ function deriveFallback(post) {
 function openPopupForIndex(idx) {
   const post = galleryData[idx];
   if (!post) return;
-  // preview image show (prefer sample/jpeg for better quality)
-  const previewSrc = post.sample_url || post.jpeg_url || post.preview_url || deriveFallback(post);
+  // preview image show (prefer preview or sample)
+  const previewSrc = post.preview_url || post.sample_url || deriveFallback(post);
   popupImage.src = previewSrc;
   popupImage.loading = "eager";
   popupTags.textContent = "Tags: " + (post.tags || "");
@@ -284,34 +286,24 @@ function openPopupForIndex(idx) {
   popup.classList.remove("hidden");
   document.body.classList.add("modal-open");
 
-  // download config: first click opens ad, second initiates download of HD (file_url)
-  adClicked = false;
-  downloadBtn.textContent = "Download (1: Ad → 2: File)";
-  downloadBtn.onclick = () => {
-    if (!adClicked) {
-      // open ad in new tab (also popunder script may trigger)
-      window.open(DIRECT_AD_URL, "_blank");
-      adClicked = true;
-      downloadBtn.textContent = "Click again to start download";
+  // download link panel: show jpeg_url if exists, otherwise fallback
+  const jpeg = post.jpeg_url || post.file_url || post.sample_url || deriveFallback(post);
+  if (downloadPanel && downloadLink) {
+    if (jpeg) {
+      downloadPanel.classList.remove("hidden");
+      downloadLink.href = jpeg;
+      downloadLink.textContent = jpeg;
     } else {
-      // start programmatic download with priority: file_url -> jpeg_url -> sample_url -> fallback
-      const hd = post.file_url || post.jpeg_url || post.sample_url || deriveFallback(post);
-      if (!hd) {
-        showMessage("No downloadable file found for this post.", 4000);
-        return;
-      }
-      const a = document.createElement("a");
-      a.href = hd;
-      // try to produce filename
-      const filename = `waifu_${post.id || Date.now()}.${(hd.split(".").pop().split(/\#|\?/)[0] || "jpg")}`;
-      a.setAttribute("download", filename);
-      // append and click
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      adClicked = false;
-      downloadBtn.textContent = "Download (1: Ad → 2: File)";
+      downloadPanel.classList.add("hidden");
+      downloadLink.removeAttribute("href");
+      downloadLink.textContent = "";
     }
+  }
+
+  // download button: open panel link directly in new tab
+  downloadBtn.textContent = "Open JPEG Link";
+  downloadBtn.onclick = () => {
+    if (jpeg) window.open(jpeg, "_blank");
   };
 }
 
